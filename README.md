@@ -50,14 +50,8 @@ never set `KAFKA_BOOTSTRAP_SERVERS`, so telemetry is a guaranteed no-op in the t
 mocking is needed for that path, and `tests/test_telemetry.py` covers the envelope/publish logic
 directly against a fake producer instead.
 
-**Bug found and fixed while integration-testing against a real broker**: the first implementation
-didn't actually satisfy "never blocks" — constructing the `KafkaProducer` blocked the request
-thread indefinitely when the broker was unreachable. `docker compose up` with the eventbus stack
-down hung every request. Fixed by constructing the producer in a background thread that the
-request path joins with a 1-second bound (`_PRODUCER_INIT_JOIN_TIMEOUT_S`): worst case, the first
-request(s) after startup pay ~1s of added latency while the connection attempt resolves in the
-background; every request after that is instant either way, whether the producer ends up ready or
-disabled. See `url_shortener/telemetry.py`.
+A bug in the first implementation (blocking indefinitely when the broker was unreachable) and the
+bounded background-thread fix are documented in `docs/adr/0001`.
 
 ## Docker Compose integration verification
 
@@ -66,10 +60,10 @@ confirmed the platform's first genuine cross-repo event end-to-end, not just uni
 `POST /shorten` → `GET /{code}` → consumed the resulting event directly off Repo 3's broker,
 correctly formed per the plan doc's envelope schema (`scenario_type: "brownfield"`, `metrics`
 including `status_code`/`latency_ms`/`is_404`/`is_rate_limited`, `payload` with the request's
-method/path/code). This exercise is also what found two real bugs, both fixed and covered above and
-in the plan doc's conflict C6: the producer-construction hang here, and a Kafka advertised-listener
-misconfiguration in `agentic-sdlc-eventbus` itself (`KAFKA_BOOTSTRAP_SERVERS` now points at port
-9093, not 9092 — see this repo's `docker-compose.yml` comment and eventbus's README for why).
+method/path/code). This exercise is also what found two real bugs: the producer-construction hang
+(`docs/adr/0001`, this repo) and a Kafka advertised-listener misconfiguration in
+`agentic-sdlc-eventbus` itself (`KAFKA_BOOTSTRAP_SERVERS` now points at port 9093, not 9092 - see
+that repo's `docs/adr/0001`).
 
 ## Unit test coverage report
 
