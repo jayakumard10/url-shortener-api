@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: url-shortener-postgres
+    environment:
+      POSTGRES_DB: url_shortener
+      POSTGRES_USER: url_shortener
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - url-shortener-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U url_shortener -d url_shortener"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    mem_limit: 512m
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      secrets:
+        - github_pat
+    container_name: url-shortener-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: url_shortener
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: url_shortener
+      # Repo 3's broker, reached from this repo's own separate compose project.
+      # Port 9093 (DOCKER_INTERNAL listener), not 9092 (PLAINTEXT_HOST) - the
+      # latter advertises `localhost`, which inside this container resolves to
+      # itself, not the eventbus host (see agentic-sdlc-eventbus's README).
+      KAFKA_BOOTSTRAP_SERVERS: host.docker.internal:9093
+    secrets:
+      - postgres_password
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    mem_limit: 512m
+    restart: unless-stopped
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  github_pat:
+    file: ./secrets/github_pat.txt
+
+volumes:
+  url-shortener-postgres-data:
