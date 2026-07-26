@@ -1,0 +1,72 @@
+name: ci
+
+# Both jobs need read access to the private agentic-sdlc-eventbus repo (the
+# agentic-events dependency). Requires a repository secret named
+# EVENTBUS_READ_PAT: a fine-grained, read-only GitHub PAT scoped to
+# agentic-sdlc-eventbus (the same kind of credential used for clone-per-run
+# elsewhere in this platform, locked decision 3) - set it under this repo's
+# Settings > Secrets and variables > Actions before this workflow will pass.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure read access to the private agentic-events dependency
+        run: |
+          git config --global url."https://${{ secrets.EVENTBUS_READ_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        run: pytest --cov=url_shortener --cov-report=term-missing
+
+  compose-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write local secret files for compose
+        run: |
+          mkdir -p secrets
+          printf '%s' "${{ secrets.EVENTBUS_READ_PAT }}" > secrets/github_pat.txt
+          printf 'ci-postgres-password' > secrets/postgres_password.txt
+
+      - name: Build and start
+        run: docker compose up -d --build
+
+      - name: Wait for API healthy
+        run: |
+          for i in $(seq 1 30); do
+            status="$(docker inspect --format='{{.State.Health.Status}}' url-shortener-api || echo starting)"
+            echo "attempt $i: $status"
+            if [ "$status" = "healthy" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "api never became healthy" >&2
+          docker compose logs
+          exit 1
+
+      - name: Smoke test /health
+        run: curl -sf http://localhost:8000/health
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
