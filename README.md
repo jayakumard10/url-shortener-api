@@ -5,9 +5,6 @@ FastAPI URL shortener: `POST /shorten`, `GET /{code}` (redirect), `GET /{code}/s
 limiter on `/shorten`, and a Kafka telemetry publish on every request. Own `postgres:16-alpine`
 — no other repo may connect to it (locked decision 2, database-per-service).
 
-The cross-repo view (end-to-end signal trace, event contract, all 4 repos' compose files) is
-maintained separately as an internal planning document, outside this repo.
-
 ## Tech stack
 
 - **Framework**: [FastAPI](https://fastapi.tiangolo.com/) 0.136.1, Uvicorn 0.34.0
@@ -16,6 +13,24 @@ maintained separately as an internal planning document, outside this repo.
 - **Auth**: API-key header (`hmac.compare_digest`), in-process fixed-window rate limiting
 - **Testing**: pytest 8.3.4, pytest-cov 7.1.0, FastAPI `TestClient` (httpx 0.28.1)
 - **Infra**: Docker Compose, Docker BuildKit secrets, GitHub Actions CI
+
+## Architecture
+
+```mermaid
+flowchart TD
+    client(["Client request"]) --> mw["telemetry middleware<br/>wraps every request"]
+    mw --> routes["FastAPI routes<br/>/health · /shorten · /{code} · /{code}/stats"]
+    routes -->|"/shorten, /{code}/stats"| auth["auth.require_api_key"]
+    routes -->|"/shorten only"| ratelimit["rate_limit.is_allowed"]
+    routes --> repo["repository.SQLAlchemyURLRepository"]
+    repo --> pg[("postgres:16-alpine<br/>own container, own network")]
+    mw -. "request-telemetry event<br/>best-effort, ~1s bound" .-> broker(["agentic-sdlc-eventbus broker<br/>host.docker.internal:9093"])
+```
+
+Auth and rate-limiting only gate the routes that need them (`/{code}` redirect stays public by
+design — see `auth.py`'s docstring). The telemetry middleware wraps every request regardless of
+which path it took, which is why it's drawn wrapping the whole flow rather than sitting after one
+specific route.
 
 ## Kafka telemetry
 
