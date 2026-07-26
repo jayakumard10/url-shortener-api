@@ -20,6 +20,7 @@ services:
     restart: unless-stopped
 
   api:
+    image: url-shortener-api:latest
     build:
       context: .
       secrets:
