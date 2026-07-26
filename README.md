@@ -5,12 +5,17 @@ FastAPI URL shortener: `POST /shorten`, `GET /{code}` (redirect), `GET /{code}/s
 limiter on `/shorten`, and a Kafka telemetry publish on every request. Own `postgres:16-alpine`
 — no other repo may connect to it (locked decision 2, database-per-service).
 
-For the cross-repo view (end-to-end signal trace, event contract, all 4 repos' compose files)
-see the living Master Plan document at `C:\srcCode\4-repo-migration-PLAN.md`.
+The cross-repo view (end-to-end signal trace, event contract, all 4 repos' compose files) is
+maintained separately as an internal planning document, outside this repo.
 
-Ported from the monolith's `/target_app` with an `app` → `url_shortener` rename; fresh `git init`,
-no monolith history preserved. Full migration record — every deviation from a literal lift-and-shift
-and why — lives in the plan doc's section 6, not duplicated here.
+## Tech stack
+
+- **Framework**: [FastAPI](https://fastapi.tiangolo.com/) 0.136.1, Uvicorn 0.34.0
+- **Database**: PostgreSQL 16 (Alpine), SQLAlchemy 2.0.36, psycopg 3.2.3
+- **Events**: kafka-python-ng 2.2.3, `agentic-events` (shared envelope contract)
+- **Auth**: API-key header (`hmac.compare_digest`), in-process fixed-window rate limiting
+- **Testing**: pytest 8.3.4, pytest-cov 7.1.0, FastAPI `TestClient` (httpx 0.28.1)
+- **Infra**: Docker Compose, Docker BuildKit secrets, GitHub Actions CI
 
 ## Kafka telemetry
 
@@ -91,10 +96,6 @@ pip install -r requirements.txt
 pytest --cov=url_shortener --cov-report=term-missing
 ```
 
-`agentic-events` is a private-repo git dependency (`agentic-sdlc-eventbus`) — this works locally
-as long as your machine's git is already authenticated to GitHub as `jayakumard10` (the same
-credential that already pushes to these repos).
-
 ## Running with Docker Compose
 
 One-time setup — copy the secret templates and fill in real values:
@@ -111,7 +112,7 @@ docker compose ps   # wait for both services healthy
 curl http://localhost:8000/health
 ```
 
-`KAFKA_BOOTSTRAP_SERVERS` defaults to `host.docker.internal:9092` — bring up
+`KAFKA_BOOTSTRAP_SERVERS` defaults to `host.docker.internal:9093` — bring up
 `agentic-sdlc-eventbus`'s compose stack first if you want telemetry to actually land somewhere;
 the API works fine without it (telemetry just gets skipped, logged once).
 
