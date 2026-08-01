@@ -25,7 +25,12 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run tests with coverage
-        run: pytest --cov=url_shortener --cov-report=term-missing
+        # Measured 92% (35 tests). The floor sits just under it so coverage can
+        # only ratchet up. The two gaps below it are deliberate and documented in
+        # the README: db.py's real session bodies, and telemetry.py's producer
+        # construction, which needs a reachable-or-unreachable broker and is
+        # covered by the compose integration run instead.
+        run: pytest --cov=url_shortener --cov-report=term-missing --cov-fail-under=91
 
   compose-smoke-test:
     runs-on: ubuntu-latest

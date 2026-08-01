@@ -67,6 +67,8 @@ that repo's `docs/adr/0001`).
 
 ## Unit test coverage report
 
+CI enforces a floor of 91% (`--cov-fail-under=91`), so coverage can only ratchet upward.
+
 ```
 35 passed in 3.50s
 
