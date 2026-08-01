@@ -5,8 +5,8 @@ metrics (status-code distribution, 404-on-redirect rate, rate-limit-rejection
 rate) need coverage of failed and rejected requests too, not only successful
 shortens. Publishing is best-effort and must never block or fail the HTTP
 response: if KAFKA_BOOTSTRAP_SERVERS is unset or the broker is unreachable,
-telemetry is silently disabled rather than raising - see the master plan doc's
-Reliability section ("Kafka down at produce time in Repo 4").
+telemetry is silently disabled rather than raising. A broker outage must never
+turn a successful request into a failed one - see docs/adr/0001.
 """
 
 from __future__ import annotations

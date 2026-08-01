@@ -3,7 +3,7 @@
 FastAPI URL shortener: `POST /shorten`, `GET /{code}` (redirect), `GET /{code}/stats`,
 `GET /health`. API-key auth on write/analytics endpoints, an in-process fixed-window rate
 limiter on `/shorten`, and a Kafka telemetry publish on every request. Own `postgres:16-alpine`
-— no other repo may connect to it (locked decision 2, database-per-service).
+— no other repo may connect to it (database-per-service).
 
 ## Tech stack
 
@@ -40,11 +40,11 @@ request has none, e.g. `/health`). This is deliberately broader than "publish af
 the platform's drift metrics (status-code distribution, 404-on-redirect rate,
 rate-limit-rejection rate) need coverage of failed and rejected requests too, which don't touch
 the database at all. The middleware runs *after* `call_next`, so for DB-mutating routes the
-publish still happens strictly after that route's own Postgres commit — Repo 4's transactional
-boundary (plan doc section 1) is preserved.
+publish still happens strictly after that route's own Postgres commit — `url-shortener-api`'s transactional
+boundary is preserved.
 
-Publishing is best-effort and never blocks or fails the response (plan doc's Reliability
-section): if `KAFKA_BOOTSTRAP_SERVERS` is unset, or the producer can't be constructed, or a send
+Publishing is best-effort and never blocks or fails the response (see the reliability
+note below): if `KAFKA_BOOTSTRAP_SERVERS` is unset, or the producer can't be constructed, or a send
 fails, telemetry is silently skipped/logged — the HTTP response is unaffected either way. Tests
 never set `KAFKA_BOOTSTRAP_SERVERS`, so telemetry is a guaranteed no-op in the test suite; no
 mocking is needed for that path, and `tests/test_telemetry.py` covers the envelope/publish logic
@@ -57,8 +57,8 @@ bounded background-thread fix are documented in `docs/adr/0001`.
 
 Ran the full stack (this repo's `postgres`+`api`, plus `agentic-sdlc-eventbus`'s real broker) and
 confirmed the platform's first genuine cross-repo event end-to-end, not just unit-level:
-`POST /shorten` → `GET /{code}` → consumed the resulting event directly off Repo 3's broker,
-correctly formed per the plan doc's envelope schema (`scenario_type: "brownfield"`, `metrics`
+`POST /shorten` → `GET /{code}` → consumed the resulting event directly off `agentic-sdlc-eventbus`'s broker,
+correctly formed per the shared `agentic-events` envelope schema (`scenario_type: "brownfield"`, `metrics`
 including `status_code`/`latency_ms`/`is_404`/`is_rate_limited`, `payload` with the request's
 method/path/code). This exercise is also what found two real bugs: the producer-construction hang
 (`docs/adr/0001`, this repo) and a Kafka advertised-listener misconfiguration in

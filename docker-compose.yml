@@ -34,7 +34,7 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_HOST: postgres
       POSTGRES_DB: url_shortener
-      # Repo 3's broker, reached from this repo's own separate compose project.
+      # `agentic-sdlc-eventbus`'s broker, reached from this repo's own separate compose project.
       # Port 9093 (DOCKER_INTERNAL listener), not 9092 (PLAINTEXT_HOST) - the
       # latter advertises `localhost`, which inside this container resolves to
       # itself, not the eventbus host (see agentic-sdlc-eventbus's README).
