@@ -23,8 +23,6 @@ services:
     image: url-shortener-api:latest
     build:
       context: .
-      secrets:
-        - github_pat
     container_name: url-shortener-api
     ports:
       - "8000:8000"
@@ -55,8 +53,6 @@ services:
 secrets:
   postgres_password:
     file: ./secrets/postgres_password.txt
-  github_pat:
-    file: ./secrets/github_pat.txt
 
 volumes:
   url-shortener-postgres-data:

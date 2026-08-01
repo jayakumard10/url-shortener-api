@@ -1,11 +1,8 @@
 name: ci
 
-# Both jobs need read access to the private agentic-sdlc-eventbus repo (the
-# agentic-events dependency). Requires a repository secret named
-# EVENTBUS_READ_PAT: a fine-grained, read-only GitHub PAT scoped to
-# agentic-sdlc-eventbus (the same kind of credential used for clone-per-run
-# elsewhere in this platform, locked decision 3) - set it under this repo's
-# Settings > Secrets and variables > Actions before this workflow will pass.
+# No repository secrets required. The agentic-events dependency lives in
+# agentic-sdlc-eventbus, which is public, so it resolves over anonymous HTTPS -
+# a fork of this repo gets a green build with nothing to configure.
 
 on:
   push:
@@ -24,15 +21,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Configure read access to the private agentic-events dependency
-        run: |
-          git config --global url."https://${{ secrets.EVENTBUS_READ_PAT }}@github.com/".insteadOf "https://github.com/"
-
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Run tests with coverage
-        run: pytest --cov=url_shortener --cov-report=term-missing
+        # Measured 92% (35 tests). The floor sits just under it so coverage can
+        # only ratchet up. The two gaps below it are deliberate and documented in
+        # the README: db.py's real session bodies, and telemetry.py's producer
+        # construction, which needs a reachable-or-unreachable broker and is
+        # covered by the compose integration run instead.
+        run: pytest --cov=url_shortener --cov-report=term-missing --cov-fail-under=91
 
   compose-smoke-test:
     runs-on: ubuntu-latest
@@ -41,10 +39,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Write local secret files for compose
+      - name: Write local secret file for compose
         run: |
           mkdir -p secrets
-          printf '%s' "${{ secrets.EVENTBUS_READ_PAT }}" > secrets/github_pat.txt
           printf 'ci-postgres-password' > secrets/postgres_password.txt
 
       - name: Build and start

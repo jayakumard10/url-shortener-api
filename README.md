@@ -67,6 +67,8 @@ that repo's `docs/adr/0001`).
 
 ## Unit test coverage report
 
+CI enforces a floor of 91% (`--cov-fail-under=91`), so coverage can only ratchet upward.
+
 ```
 35 passed in 3.50s
 
@@ -111,8 +113,7 @@ One-time setup — copy the secret templates and fill in real values:
 
 ```bash
 cp secrets/postgres_password.txt.example secrets/postgres_password.txt
-cp secrets/github_pat.txt.example secrets/github_pat.txt
-# edit secrets/github_pat.txt: a fine-grained, read-only PAT scoped to agentic-sdlc-eventbus
+# edit secrets/postgres_password.txt: a password of your choosing
 ```
 
 ```bash
@@ -127,8 +128,6 @@ the API works fine without it (telemetry just gets skipped, logged once).
 
 ## CI
 
-`.github/workflows/ci.yml` needs a repository secret **`EVENTBUS_READ_PAT`** (Settings → Secrets
-and variables → Actions) — a fine-grained, read-only PAT scoped to `agentic-sdlc-eventbus`, used
-both to `pip install` the private `agentic-events` dependency and to build the Docker image in
-CI. This is a manual one-time setup step; the workflow will fail on `pip install`/`docker build`
-until it's set.
+`.github/workflows/ci.yml` needs no repository secrets. `agentic-events` is hosted in
+`agentic-sdlc-eventbus`, which is public, so both `pip install` and `docker build` resolve it over
+anonymous HTTPS — a fork of this repo builds green with nothing to configure.
