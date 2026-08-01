@@ -2,7 +2,7 @@
 
 independent of the HTTP/database layers. Despite the filename, this is a short-code
 generation test (the 7-character redirect code), not an orchestrator/LLM code
-generation test - it stays in this repo, not Repo 1.
+generation test - it stays in this repo, not `agentic-sdlc-control-plane`.
 """
 
 from __future__ import annotations
