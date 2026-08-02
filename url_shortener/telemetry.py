@@ -38,7 +38,13 @@ _producer = None
 _producer_init_failed = False
 _producer_init_thread: threading.Thread | None = None
 _producer_init_lock = threading.Lock()
+
+# Incremented from Kafka's callback threads, not the request thread, so the
+# increment needs its own lock: `+= 1` is a read and a write, and two callbacks
+# landing together would otherwise lose one of them. Reading it for /health is a
+# single load and does not.
 publish_failures = 0
+_failure_lock = threading.Lock()
 
 
 def _construct_producer(bootstrap_servers: str) -> None:
@@ -92,8 +98,30 @@ def _get_producer():
 
 def _on_send_error(exc: BaseException) -> None:
     global publish_failures
-    publish_failures += 1
+    with _failure_lock:
+        publish_failures += 1
     logger.warning("request telemetry publish failed: %s", exc)
+
+
+def telemetry_status() -> dict[str, object]:
+    """What telemetry is currently doing, for /health to report.
+
+    A dropped event is invisible from outside this process: publishing is
+    deliberately best-effort, so a broker outage costs telemetry and changes
+    nothing a caller can see. That is the right trade for request latency and the
+    wrong one for operating the service, because the drift metrics downstream go
+    quiet without anything here saying why.
+
+    `configured` and `publishing` are distinct on purpose. A broker that is set but
+    unreachable reads as configured-but-not-publishing, which is the state worth
+    alerting on; neither flag alone distinguishes it from telemetry being switched
+    off deliberately.
+    """
+    return {
+        "configured": bool(os.environ.get("KAFKA_BOOTSTRAP_SERVERS")),
+        "publishing": _producer is not None,
+        "publish_failures": publish_failures,
+    }
 
 
 def build_envelope(
