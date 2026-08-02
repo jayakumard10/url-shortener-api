@@ -1,10 +1,15 @@
 """Unit tests for url_shortener.telemetry: envelope construction, the disabled-when-
-unconfigured no-op path, and the publish call shape against a fake producer.
+unconfigured no-op path, the publish call shape against a fake producer, and the
+bounded-construction guarantee that keeps an unreachable broker out of the request path.
 """
 
 from __future__ import annotations
 
 import json
+import threading
+import time
+
+import kafka
 
 from url_shortener import telemetry
 
@@ -57,6 +62,86 @@ def test_publish_is_noop_when_kafka_bootstrap_servers_unset(monkeypatch):
     telemetry.publish_request_telemetry(
         method="GET", path="/health", status_code=200, latency_ms=0.5, code=None
     )
+
+
+def test_an_unreachable_broker_never_holds_up_the_request_path(monkeypatch):
+    """ADR 0001's guarantee, driven through the real mechanism.
+
+    `KafkaProducer` construction against a broker that accepts the connection and
+    then never answers used to block every HTTP request for as long as it took to
+    give up. The fix moves construction to a background thread that the request path
+    only ever joins *with a timeout*.
+
+    This test deliberately does not patch `_get_producer` away, unlike the tests
+    around it: the thread, the lock and the join timeout are the things under test.
+    Remove any of them and the call below inherits the constructor's full stall
+    instead of the join timeout, and this fails.
+    """
+    release = threading.Event()
+    constructing = threading.Event()
+
+    class _NeverAnswers:
+        def __init__(self, **kwargs):
+            constructing.set()
+            # Stands in for a broker that holds the connection open and says nothing.
+            release.wait(timeout=30)
+            raise AssertionError("broker never answered")
+
+    monkeypatch.setattr(kafka, "KafkaProducer", _NeverAnswers)
+    monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "broker.invalid:9092")
+    monkeypatch.setattr(telemetry, "_producer", None)
+    monkeypatch.setattr(telemetry, "_producer_init_failed", False)
+    monkeypatch.setattr(telemetry, "_producer_init_thread", None)
+    monkeypatch.setattr(telemetry, "_PRODUCER_INIT_JOIN_TIMEOUT_S", 0.2)
+
+    started = time.perf_counter()
+    telemetry.publish_request_telemetry(
+        method="GET", path="/health", status_code=200, latency_ms=0.5, code=None
+    )
+    elapsed = time.perf_counter() - started
+
+    # Let the background construction unwind before monkeypatch restores the globals
+    # it is about to write to.
+    release.set()
+    thread = telemetry._producer_init_thread
+    if thread is not None:
+        thread.join(timeout=10)
+
+    assert constructing.is_set(), "construction never started; the test patched the wrong thing"
+    assert elapsed < 5, (
+        f"the request path waited {elapsed:.1f}s on an unreachable broker; "
+        "construction is no longer bounded"
+    )
+
+
+def test_a_failed_producer_construction_disables_telemetry_instead_of_raising(monkeypatch):
+    """Construction that raises must leave telemetry off, not surface to the caller.
+
+    The thread cannot propagate into the request that started it, so the only way a
+    failure is visible is the flag it sets and the log it writes. A caller that saw
+    an exception here would be a request failed by telemetry, which ADR 0001 forbids.
+    """
+
+    class _RefusesToConnect:
+        def __init__(self, **kwargs):
+            raise OSError("no route to broker")
+
+    monkeypatch.setattr(kafka, "KafkaProducer", _RefusesToConnect)
+    monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "broker.invalid:9092")
+    monkeypatch.setattr(telemetry, "_producer", None)
+    monkeypatch.setattr(telemetry, "_producer_init_failed", False)
+    monkeypatch.setattr(telemetry, "_producer_init_thread", None)
+
+    telemetry.publish_request_telemetry(
+        method="GET", path="/health", status_code=200, latency_ms=0.5, code=None
+    )
+
+    thread = telemetry._producer_init_thread
+    if thread is not None:
+        thread.join(timeout=10)
+
+    assert telemetry._producer is None
+    assert telemetry._producer_init_failed is True
 
 
 def test_publish_sends_serialized_envelope_to_fake_producer(monkeypatch):

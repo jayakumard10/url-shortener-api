@@ -30,7 +30,7 @@ jobs:
         # the README: db.py's real session bodies, and telemetry.py's producer
         # construction, which needs a reachable-or-unreachable broker and is
         # covered by the compose integration run instead.
-        run: pytest --cov=url_shortener --cov-report=term-missing --cov-fail-under=91
+        run: pytest --cov=url_shortener --cov-report=term-missing --cov-fail-under=97
 
       - name: Assert every mermaid diagram parses
         # "The diagrams render on GitHub" has broken three times, and every time the

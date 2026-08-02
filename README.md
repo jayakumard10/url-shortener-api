@@ -67,10 +67,10 @@ that repo's `docs/adr/0001`).
 
 ## Unit test coverage report
 
-CI enforces a floor of 91% (`--cov-fail-under=91`), so coverage can only ratchet upward.
+CI enforces a floor of 97% (`--cov-fail-under=97`), so coverage can only ratchet upward.
 
 ```
-35 passed in 3.50s
+38 passed in 2.87s
 
 Name                          Stmts   Miss  Cover   Missing
 -----------------------------------------------------------
@@ -82,22 +82,24 @@ url_shortener\models.py          14      0   100%
 url_shortener\rate_limit.py      18      0   100%
 url_shortener\repository.py      24      0   100%
 url_shortener\schemas.py         14      0   100%
-url_shortener\telemetry.py       55     14    75%   46-67, 82-90
+url_shortener\telemetry.py       59      1    98%   73
 -----------------------------------------------------------
-TOTAL                           237     19    92%
+TOTAL                           241      6    98%
 ```
 
-The two coverage gaps are both deliberate, not oversights:
+The remaining gaps are deliberate, not oversights:
 - `db.py` lines 60/64-68 (`init_db`/`get_session` real bodies) — tests substitute both via
   `monkeypatch`/`dependency_overrides` so the real DB never gets touched by the unit suite. Same
   gap existed in the monolith's original test suite; SQLite-backed integration coverage of these
   two functions comes from every other test indirectly (they run through the overridden versions).
-- `telemetry.py` lines 46-67/82-90 (`_construct_producer`'s real `KafkaProducer` construction, and
-  the background-thread join path in `_get_producer`) — needs an actual reachable-or-unreachable
-  broker to exercise meaningfully; this is exactly the code path the Docker Compose integration run
-  above exercised and where the producer-construction-hang bug was actually found. Covered at the
-  integration level, not unit tests — line count went up (was 44/8/82%) because the reliability fix
-  added the threading logic itself.
+- `telemetry.py` line 73 — the early return taken once a producer already exists, which needs a
+  successfully constructed real producer to reach.
+
+`_construct_producer` and the background-thread join in `_get_producer` used to sit in this list,
+covered only by the Compose run below. They are unit-covered now, because "verified by running the
+real stack" is not a property CI can hold onto: the tests that touched telemetry all patched
+`_get_producer` away, so the thread, the lock and the join timeout could each have been deleted
+with the suite green and the producer-hang defect of ADR 0001 would have come straight back.
 
 ## Local development
 

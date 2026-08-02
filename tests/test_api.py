@@ -8,7 +8,18 @@ from url_shortener.rate_limit import MAX_REQUESTS_PER_WINDOW
 def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json()["status"] == "ok"
+
+
+def test_health_reports_telemetry_state(client):
+    """The publish-failure count has to be reachable from outside the process.
+
+    It is incremented on a Kafka callback thread and nothing else reads it, so
+    without this it is a counter that measures something real and tells nobody.
+    """
+    body = client.get("/health").json()["telemetry"]
+    assert set(body) == {"configured", "publishing", "publish_failures"}
+    assert isinstance(body["publish_failures"], int)
 
 
 def test_shorten_then_redirect_then_stats(client):

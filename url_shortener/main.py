@@ -61,8 +61,14 @@ def _generate_unique_code(repo: URLRepository) -> str:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, object]:
+    """Liveness, plus whether telemetry is actually reaching the broker.
+
+    Telemetry failures never fail a request, so they are silent by design. Carrying
+    the counter here is what makes them countable from outside the process without
+    giving up that property.
+    """
+    return {"status": "ok", "telemetry": telemetry.telemetry_status()}
 
 
 @app.post(
