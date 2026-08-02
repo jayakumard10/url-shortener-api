@@ -25,7 +25,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run tests with coverage
-        # Measured 92% (35 tests). The floor sits just under it so coverage can
+        # Measured 98% (38 tests). The floor sits just under it so coverage can
         # only ratchet up. The two gaps below it are deliberate and documented in
         # the README: db.py's real session bodies, and telemetry.py's producer
         # construction, which needs a reachable-or-unreachable broker and is
