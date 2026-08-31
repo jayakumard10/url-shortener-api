@@ -55,15 +55,10 @@ bounded background-thread fix are documented in `docs/adr/0001`.
 
 ## Docker Compose integration verification
 
-Ran the full stack (this repo's `postgres`+`api`, plus `agentic-sdlc-eventbus`'s real broker) and
-confirmed the platform's first genuine cross-repo event end-to-end, not just unit-level:
-`POST /shorten` → `GET /{code}` → consumed the resulting event directly off `agentic-sdlc-eventbus`'s broker,
-correctly formed per the shared `agentic-events` envelope schema (`scenario_type: "brownfield"`, `metrics`
-including `status_code`/`latency_ms`/`is_404`/`is_rate_limited`, `payload` with the request's
-method/path/code). This exercise is also what found two real bugs: the producer-construction hang
-(`docs/adr/0001`, this repo) and a Kafka advertised-listener misconfiguration in
-`agentic-sdlc-eventbus` itself (`KAFKA_BOOTSTRAP_SERVERS` now points at port 9093, not 9092 - see
-that repo's `docs/adr/0001`).
+The cross-repo broker verification, the automated seam test that replaced the manual
+exercise, and the two defects it found live in
+[`tests/evaluation/REPORT.md`](tests/evaluation/REPORT.md) — beside the test that
+reproduces them rather than in this file.
 
 ## Unit test coverage report
 
