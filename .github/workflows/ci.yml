@@ -59,16 +59,24 @@ jobs:
         # commit SHA and hashes every wheel, so this step is what makes an install
         # reproducible rather than merely pinned.
         #
+        # --universal is load-bearing, not decoration. Without it the resolution is
+        # specific to whatever platform generated it: a lock compiled on Windows
+        # carries colorama and tzdata, while Linux resolves uvloop from
+        # uvicorn[standard], so this step compared a Windows lock against a Linux
+        # recompile and failed on three packages that were never wrong. A universal
+        # resolution carries every platform's dependencies behind environment
+        # markers, so the same command produces the same file anywhere.
+        #
         # Recompiled with the identical command so the generated header matches too.
         # A diff here means someone changed requirements.txt without regenerating,
         # or an upstream tag moved - both worth failing for, and neither visible in
         # a passing test suite.
         run: |
           cp requirements.lock "$RUNNER_TEMP/requirements.lock.committed"
-          uv pip compile requirements.txt --generate-hashes --python-version 3.12 -o requirements.lock
+          uv pip compile requirements.txt --universal --generate-hashes --python-version 3.12 -o requirements.lock
           diff -u "$RUNNER_TEMP/requirements.lock.committed" requirements.lock || {
             echo "::error::requirements.lock is stale. Regenerate with:"
-            echo "  uv pip compile requirements.txt --generate-hashes --python-version 3.12 -o requirements.lock"
+            echo "  uv pip compile requirements.txt --universal --generate-hashes --python-version 3.12 -o requirements.lock"
             exit 1
           }
 

@@ -93,7 +93,7 @@ pip install --require-hashes -r requirements.lock
 Regenerate that lock whenever `requirements.txt` changes, or CI will fail asking you to:
 
 ```bash
-uv pip compile requirements.txt --generate-hashes --python-version 3.12 -o requirements.lock
+uv pip compile requirements.txt --universal --generate-hashes --python-version 3.12 -o requirements.lock
 ```
 
 Contribution rules, and which test tier a new test belongs in, are in

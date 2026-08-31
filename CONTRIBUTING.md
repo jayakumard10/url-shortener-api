@@ -61,7 +61,7 @@ skipped seam test proves nothing while looking green.
   `cmd | tail -1` returns `tail`'s status rather than `cmd`'s. Check `echo $?`.
 - **Changed a dependency?** Regenerate the lock, or CI will tell you to:
   ```bash
-  uv pip compile requirements.txt --generate-hashes --python-version 3.12 -o requirements.lock
+  uv pip compile requirements.txt --universal --generate-hashes --python-version 3.12 -o requirements.lock
   ```
 - **Changed the telemetry envelope?** That is a change to
   `url-shortener.request-telemetry.v1`, which other repositories read. The contract tier
