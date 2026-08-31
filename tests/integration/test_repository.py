@@ -1,4 +1,8 @@
-"""Unit tests for the repository layer, independent of the HTTP API."""
+"""Repository-layer tests against a real SQLite engine, independent of the HTTP API.
+
+Integration rather than unit: every test here builds an engine, creates the schema
+and issues real SQL. The tier is what the test needs, not how narrow its subject is.
+"""
 
 from __future__ import annotations
 
