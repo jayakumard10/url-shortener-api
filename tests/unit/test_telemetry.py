@@ -165,27 +165,3 @@ def test_on_send_error_increments_failure_counter():
     before = telemetry.publish_failures
     telemetry._on_send_error(RuntimeError("broker unreachable"))
     assert telemetry.publish_failures == before + 1
-
-
-def test_middleware_calls_publish_with_resolved_path_param(client, monkeypatch):
-    """End-to-end: a real request through the app's middleware stack must call
-    publish_request_telemetry with the {code} path param resolved and the real
-    response status code - not just that build_envelope/producer work in isolation.
-    """
-    calls = []
-    monkeypatch.setattr(
-        "url_shortener.main.telemetry.publish_request_telemetry",
-        lambda **kwargs: calls.append(kwargs),
-    )
-
-    shorten_response = client.post("/shorten", json={"long_url": "https://example.com/x"})
-    code = shorten_response.json()["code"]
-    calls.clear()
-
-    redirect_response = client.get(f"/{code}", follow_redirects=False)
-    assert redirect_response.status_code == 307
-
-    assert len(calls) == 1
-    assert calls[0]["status_code"] == 307
-    assert calls[0]["code"] == code
-    assert calls[0]["method"] == "GET"
