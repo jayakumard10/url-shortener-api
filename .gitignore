@@ -22,3 +22,12 @@ secrets/*.txt
 # CI does this on every run; nothing here is ever a build input.
 node_modules/
 package-lock.json
+
+# Compose merges both of these automatically from beside docker-compose.yml, with
+# no output saying it did. Committing either would silently apply one developer's
+# local overrides to everybody, including CI. They may exist on a machine; they
+# must never be tracked. Neither has a committed .example counterpart here: this
+# stack has one fixed shape and nothing reads a .env - every variable it needs is
+# set literally in docker-compose.yml.
+.env
+docker-compose.override.yml

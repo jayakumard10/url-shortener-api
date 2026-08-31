@@ -1,0 +1,42 @@
+version: 2
+
+updates:
+  # Every version in requirements.txt is pinned exactly, which stops surprise
+  # upgrades and equally stops security fixes arriving. Pinned and unwatched is the
+  # combination that quietly rots.
+  #
+  # KNOWN INTERACTION, stated rather than discovered later: CI asserts that
+  # requirements.lock is current, and Dependabot does not know this repository has a
+  # lock file. A Dependabot PR that edits requirements.txt will therefore fail the
+  # "Assert requirements.lock is current" step until someone regenerates it:
+  #
+  #   uv pip compile requirements.txt --universal --generate-hashes --python-version 3.12 -o requirements.lock
+  #
+  # That is a visible red check with a message saying exactly what to run, which is
+  # a better failure than a lock that silently drifts from the pins beside it.
+  #
+  # agentic-events is a git dependency pinned to a tag; Dependabot does not bump
+  # those for pip. Its resolved commit SHA is in requirements.lock, so a moved tag
+  # is caught by the same CI step rather than by this file.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the routine patch traffic. Separate PRs per package turn a
+      # security bump into something that has to be found among nine others.
+      patch-updates:
+        update-types: ["patch"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  # The workflow pins actions by major tag (actions/checkout@v4), so this is what
+  # notices a v5. Public repo, so these runs cost nothing.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

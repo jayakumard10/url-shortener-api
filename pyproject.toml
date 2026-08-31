@@ -1,0 +1,38 @@
+# Tool configuration only. There is deliberately no [project] table and no
+# [build-system]: nothing installs this repository.
+#
+# It is an application, not a distributable. The Dockerfile does
+# `COPY requirements.txt` -> `pip install -r` -> `COPY . .` and runs
+# `uvicorn url_shortener.main:app` with WORKDIR /app, so the package resolves
+# because the working directory is on sys.path. Adding a build backend here - or
+# moving the package under src/ - would break that container build in exchange for
+# packaging ceremony an application does not need. requirements.txt stays the
+# install mechanism.
+#
+# ruff and mypy are absent for the same reason the rest of this file is short: they
+# are not installed and not gated in CI, and configuration for a tool nobody runs is
+# a claim the repository cannot back. Adding either is a change to what CI checks,
+# not a change to where files live.
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+# --strict-markers turns a *misspelled* marker into an error. It does nothing about
+# a *missing* one, which is the failure that actually bites - a test with no marker
+# is collected, counted in "passed", and skipped entirely by a marker-filtered run.
+# The hook in tests/conftest.py handles that half by deriving each marker from the
+# directory. Both are needed; neither substitutes for the other.
+addopts = "--strict-markers"
+
+markers = [
+    "unit: no I/O - the subject is exercised in-process",
+    "contract: would this break a consumer of this service? no I/O",
+    "integration: needs a real dependency (an engine, the ASGI stack)",
+    "evaluation: the seam, from the real calling position - needs a broker",
+]
+
+[tool.coverage.run]
+source = ["url_shortener"]
+
+[tool.coverage.report]
+show_missing = true

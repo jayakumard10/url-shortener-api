@@ -1,0 +1,97 @@
+name: security
+
+# NOT path-filtered, deliberately. A workflow that only runs when certain paths
+# change does not report at all on a PR outside them, so requiring its check would
+# block those PRs forever on a context nothing reports. This one is also not a
+# required status check - `test` and `compose-smoke-test` are the two required
+# contexts on main, and adding a third here would be a branch-protection change
+# rather than a repository-layout one.
+#
+# The schedule matters more than the PR trigger: a new CVE lands against unchanged
+# code, so a scanner that only runs on diffs never finds the thing it exists for.
+# Public repo, so these runs cost nothing.
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit pinned dependencies
+        # Audits requirements.txt rather than the installed environment: the pins
+        # are what a container build resolves, so that is the thing worth auditing.
+        #
+        # This fails the job on a finding rather than reporting one quietly. The
+        # job is not a required check, so a red result here informs without
+        # blocking a merge - which is the right shape for a scanner whose input
+        # changes without anyone touching the code.
+        #
+        # agentic-events is skipped and says so: it is a git dependency and is not
+        # on PyPI, so there is no advisory database to check it against.
+        run: pip-audit -r requirements.txt --progress-spinner off
+
+  secret-hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert no real secret file is tracked
+        # .gitignore already excludes secrets/*.txt, but .gitignore does nothing
+        # about a file that is already tracked - `git add -f` beats it, and so does
+        # a file committed before the rule existed. This asserts the end state
+        # instead of trusting the rule: only .example templates may be tracked
+        # under secrets/, and .env may never be.
+        run: |
+          tracked_secrets="$(git ls-files 'secrets/**' | grep -v '\.example$' || true)"
+          tracked_env="$(git ls-files '.env' 'docker-compose.override.yml' || true)"
+          status=0
+          if [ -n "$tracked_secrets" ]; then
+            echo "::error::real secret files are tracked: $tracked_secrets"
+            status=1
+          fi
+          if [ -n "$tracked_env" ]; then
+            echo "::error::local compose overrides are tracked: $tracked_env"
+            status=1
+          fi
+          if [ "$status" -eq 0 ]; then
+            echo "only .example templates are tracked under secrets/; no local overrides tracked"
+          fi
+          exit "$status"
+
+  codeql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      - uses: github/codeql-action/analyze@v3

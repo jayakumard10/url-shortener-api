@@ -1,0 +1,19 @@
+# Review ownership. GitHub matches the LAST pattern that applies, so the catch-all
+# goes first and the narrower rules below it win.
+* @jayakumar-devaraj
+
+# The telemetry seam is the only part of this service another repository can see.
+# A change here is a change to the platform's event contract, whatever it looks
+# like locally.
+/url_shortener/telemetry.py       @jayakumar-devaraj
+/tests/contract/                  @jayakumar-devaraj
+/tests/evaluation/                @jayakumar-devaraj
+
+# Changing what CI checks, what the container builds, or what the layout is allowed
+# to be - each of these decides what every later change is measured against.
+/.github/                         @jayakumar-devaraj
+/Dockerfile                       @jayakumar-devaraj
+/docker-compose.yml               @jayakumar-devaraj
+/requirements.txt                 @jayakumar-devaraj
+/requirements.lock                @jayakumar-devaraj
+/secrets/                         @jayakumar-devaraj
