@@ -32,7 +32,7 @@ design — see `auth.py`'s docstring). The telemetry middleware wraps every requ
 which path it took, which is why it's drawn wrapping the whole flow rather than sitting after one
 specific route.
 
-## Kafka telemetry
+### Kafka telemetry
 
 Every request — not just successful `/shorten` calls — publishes a `request-telemetry` event to
 `url-shortener.request-telemetry.v1` (partition key = the `{code}` path param, or `null` when a
@@ -40,73 +40,23 @@ request has none, e.g. `/health`). This is deliberately broader than "publish af
 the platform's drift metrics (status-code distribution, 404-on-redirect rate,
 rate-limit-rejection rate) need coverage of failed and rejected requests too, which don't touch
 the database at all. The middleware runs *after* `call_next`, so for DB-mutating routes the
-publish still happens strictly after that route's own Postgres commit — `url-shortener-api`'s transactional
-boundary is preserved.
+publish still happens strictly after that route's own Postgres commit — this service's
+transactional boundary is preserved.
 
-Publishing is best-effort and never blocks or fails the response (see the reliability
-note below): if `KAFKA_BOOTSTRAP_SERVERS` is unset, or the producer can't be constructed, or a send
-fails, telemetry is silently skipped/logged — the HTTP response is unaffected either way. Tests
-never set `KAFKA_BOOTSTRAP_SERVERS`, so telemetry is a guaranteed no-op in the test suite; no
-mocking is needed for that path, and `tests/test_telemetry.py` covers the envelope/publish logic
-directly against a fake producer instead.
+Publishing is best-effort and never blocks or fails the response: if `KAFKA_BOOTSTRAP_SERVERS`
+is unset, or the producer can't be constructed, or a send fails, telemetry is silently
+skipped/logged and the HTTP response is unaffected. `/health` reports `configured`, `publishing`
+and `publish_failures` separately, so a broker that is set but unreachable is distinguishable
+from telemetry being switched off deliberately.
 
-A bug in the first implementation (blocking indefinitely when the broker was unreachable) and the
-bounded background-thread fix are documented in `docs/adr/0001`.
+The bounded background-thread construction that makes this hold is
+[`docs/adr/0001`](docs/adr/0001-bounded-background-producer-construction.md); the layout
+decisions are [`0002`](docs/adr/0002-package-stays-at-the-repository-root.md) and
+[`0003`](docs/adr/0003-the-repository-layout-is-enforced-by-a-test.md).
 
-## Docker Compose integration verification
+## Quickstart
 
-The cross-repo broker verification, the automated seam test that replaced the manual
-exercise, and the two defects it found live in
-[`tests/evaluation/REPORT.md`](tests/evaluation/REPORT.md) — beside the test that
-reproduces them rather than in this file.
-
-## Unit test coverage report
-
-CI enforces a floor of 97% (`--cov-fail-under=97`), so coverage can only ratchet upward.
-
-```
-38 passed in 2.87s
-
-Name                          Stmts   Miss  Cover   Missing
------------------------------------------------------------
-url_shortener\__init__.py         0      0   100%
-url_shortener\auth.py            10      0   100%
-url_shortener\db.py              39      5    87%   60, 64-68
-url_shortener\main.py            63      0   100%
-url_shortener\models.py          14      0   100%
-url_shortener\rate_limit.py      18      0   100%
-url_shortener\repository.py      24      0   100%
-url_shortener\schemas.py         14      0   100%
-url_shortener\telemetry.py       59      1    98%   73
------------------------------------------------------------
-TOTAL                           241      6    98%
-```
-
-The remaining gaps are deliberate, not oversights:
-- `db.py` lines 60/64-68 (`init_db`/`get_session` real bodies) — tests substitute both via
-  `monkeypatch`/`dependency_overrides` so the real DB never gets touched by the unit suite. Same
-  gap existed in the monolith's original test suite; SQLite-backed integration coverage of these
-  two functions comes from every other test indirectly (they run through the overridden versions).
-- `telemetry.py` line 73 — the early return taken once a producer already exists, which needs a
-  successfully constructed real producer to reach.
-
-`_construct_producer` and the background-thread join in `_get_producer` used to sit in this list,
-covered only by the Compose run below. They are unit-covered now, because "verified by running the
-real stack" is not a property CI can hold onto: the tests that touched telemetry all patched
-`_get_producer` away, so the thread, the lock and the join timeout could each have been deleted
-with the suite green and the producer-hang defect of ADR 0001 would have come straight back.
-
-## Local development
-
-```bash
-python -m venv .venv && source .venv/Scripts/activate   # or .venv/bin/activate on Linux/WSL
-pip install -r requirements.txt
-pytest --cov=url_shortener --cov-report=term-missing
-```
-
-## Running with Docker Compose
-
-One-time setup — copy the secret templates and fill in real values:
+One-time setup — copy the secret template and fill in a real value:
 
 ```bash
 cp secrets/postgres_password.txt.example secrets/postgres_password.txt
@@ -123,8 +73,108 @@ curl http://localhost:8000/health
 `agentic-sdlc-eventbus`'s compose stack first if you want telemetry to actually land somewhere;
 the API works fine without it (telemetry just gets skipped, logged once).
 
-## CI
+`API_KEY` is **not** set by compose and falls back to a publicly known development default.
+Set it explicitly for anything reachable by anyone else — see [`SECURITY.md`](SECURITY.md).
+
+## Local development
+
+```bash
+python -m venv .venv && source .venv/Scripts/activate   # or .venv/bin/activate on Linux/WSL
+pip install -r requirements.txt
+```
+
+To match CI's resolution exactly — pinned versions plus hashes, with the `agentic-events` git
+tag resolved to a commit SHA:
+
+```bash
+pip install --require-hashes -r requirements.lock
+```
+
+Regenerate that lock whenever `requirements.txt` changes, or CI will fail asking you to:
+
+```bash
+uv pip compile requirements.txt --generate-hashes --python-version 3.12 -o requirements.lock
+```
+
+Contribution rules, and which test tier a new test belongs in, are in
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Testing
+
+Tests are split into four tiers by what each one needs. The marker is derived from the
+directory by `tests/conftest.py`, never written by hand — a test file outside the tiers fails
+collection rather than being silently skipped by a marker-filtered run.
+
+| Tier | Needs | Tests |
+|---|---|---|
+| `tests/unit/` | nothing outside the process | 21 |
+| `tests/contract/` | nothing outside the process | 8, plus the structure test |
+| `tests/integration/` | a real engine, the ASGI stack | 17 |
+| `tests/evaluation/` | a real Kafka broker | 1 |
+
+```bash
+pytest                                    # everything
+pytest -m unit                            # one tier
+pytest --cov=url_shortener --cov-report=term-missing --cov-fail-under=97   # what CI runs
+```
+
+The evaluation tier skips when no broker is reachable, so a plain `pytest` runs clean with
+nothing started. Start `agentic-sdlc-eventbus`'s stack and set `URL_SHORTENER_REQUIRE_BROKER=1`
+to turn that skip into a failure, which is what you want whenever you have actually started one.
+
+### Coverage
+
+CI enforces a floor of 97% (`--cov-fail-under=97`), so coverage can only ratchet upward.
+Measured with a broker reachable:
+
+```
+47 passed
+
+Name                          Stmts   Miss  Cover   Missing
+-----------------------------------------------------------
+url_shortener\__init__.py         0      0   100%
+url_shortener\auth.py            10      0   100%
+url_shortener\db.py              39      5    87%   60, 64-68
+url_shortener\main.py            63      0   100%
+url_shortener\models.py          14      0   100%
+url_shortener\rate_limit.py      18      0   100%
+url_shortener\repository.py      24      0   100%
+url_shortener\schemas.py         14      0   100%
+url_shortener\telemetry.py       59      0   100%
+-----------------------------------------------------------
+TOTAL                           241      5    98%
+```
+
+Without a broker the evaluation tier skips and `telemetry.py` line 73 — the early return taken
+once a producer already exists — goes uncovered, giving `46 passed, 1 skipped` and `241/6`.
+Both are above the floor; CI sees the second.
+
+The remaining gap is deliberate. `db.py` lines 60 and 64-68 are the real `init_db`/`get_session`
+bodies, which tests substitute via `monkeypatch`/`dependency_overrides` so the unit suite never
+touches a real database.
+
+### Verification beyond unit tests
+
+The cross-repo broker verification, the automated seam test that replaced the manual exercise,
+and the two defects it found are in
+[`tests/evaluation/REPORT.md`](tests/evaluation/REPORT.md) — beside the test that reproduces
+them rather than in this file.
+
+## Deployment and CI
 
 `.github/workflows/ci.yml` needs no repository secrets. `agentic-events` is hosted in
-`agentic-sdlc-eventbus`, which is public, so both `pip install` and `docker build` resolve it over
-anonymous HTTPS — a fork of this repo builds green with nothing to configure.
+`agentic-sdlc-eventbus`, which is public, so both `pip install` and `docker build` resolve it
+over anonymous HTTPS — a fork of this repo builds green with nothing to configure.
+
+Two jobs, and both are required status checks on `main`: `test` (coverage floor, lock currency,
+mermaid parsing) and `compose-smoke-test` (builds the stack and hits `/health`). **Neither may
+be renamed without updating the branch-protection ruleset in the same change** — required checks
+match a job's display name, so a rename leaves the ruleset waiting on a context nothing reports.
+
+`.github/workflows/security.yml` runs `pip-audit`, a tracked-secret guard, and CodeQL on every
+pull request and weekly. It is deliberately not a required check: it reports without blocking.
+
+The container is unaffected by the repository's layout — it installs `requirements.txt`, copies
+the tree, and runs `uvicorn url_shortener.main:app` from `WORKDIR /app`. See
+[`docs/adr/0002`](docs/adr/0002-package-stays-at-the-repository-root.md) for why the package
+stays at the root.
