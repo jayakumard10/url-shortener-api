@@ -1,11 +1,18 @@
-"""Shared test fixtures: an isolated in-memory SQLite database per test, with the
+"""Tier markers derived from the directory, and the shared database fixtures.
 
-app's real init_db() neutralized so tests never touch the production DATABASE_URL,
-and Kafka telemetry left disabled (KAFKA_BOOTSTRAP_SERVERS unset) so tests never
-attempt a real broker connection.
+The fixtures live here at the tests/ root rather than under one tier because two
+tiers need them: ``client`` is used by tests/integration/ and the tier directories
+are siblings, so a fixture defined in one is not visible from the other.
+
+Each fixture gives a test an isolated in-memory SQLite database, neutralizes the
+app's real init_db() so tests never touch the production DATABASE_URL, and leaves
+Kafka telemetry disabled (KAFKA_BOOTSTRAP_SERVERS unset) so tests never attempt a
+real broker connection.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,7 +24,40 @@ from url_shortener import rate_limit
 from url_shortener.db import Base, get_session
 from url_shortener.main import app
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 TEST_API_KEY = "test-api-key"
+
+TIERS = ("unit", "contract", "integration", "evaluation")
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Give every test the tier marker for the directory it lives in, and refuse strays.
+
+    A test with no marker is still collected and still counted in "passed" - it is
+    only invisible to a marker-filtered run. So the day CI grows a ``-m`` selector,
+    an unmarked file silently stops being executed while the run stays green, and
+    the coverage floor quietly starts measuring a subset. ``--strict-markers`` does
+    not catch this: it catches a *misspelled* marker, never a *missing* one.
+
+    Deriving the marker from the parent directory means a new test file cannot
+    forget one. The hard failure below means a test dropped outside the four tiers
+    is a collection error rather than a test that never runs.
+    """
+    strays = []
+    for item in items:
+        tier = next((part for part in item.path.parts if part in TIERS), None)
+        if tier is None:
+            strays.append(str(item.path.relative_to(REPO_ROOT)))
+            continue
+        item.add_marker(getattr(pytest.mark, tier))
+
+    if strays:
+        raise pytest.UsageError(
+            "these test files are not in a tier directory, so a marker-filtered run "
+            f"would never execute them: {sorted(set(strays))}. "
+            f"Move each into tests/{{{','.join(TIERS)}}}/."
+        )
 
 
 @pytest.fixture()
