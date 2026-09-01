@@ -7,8 +7,8 @@ limiter on `/shorten`, and a Kafka telemetry publish on every request. Own `post
 
 ## Tech stack
 
-- **Framework**: [FastAPI](https://fastapi.tiangolo.com/) 0.136.1, Uvicorn 0.34.0
-- **Database**: PostgreSQL 16 (Alpine), SQLAlchemy 2.0.36, psycopg 3.2.3
+- **Framework**: [FastAPI](https://fastapi.tiangolo.com/) 0.141.1, Uvicorn 0.52.4
+- **Database**: PostgreSQL 16 (Alpine), SQLAlchemy 2.0.52, psycopg 3.3.4
 - **Events**: kafka-python-ng 2.2.3, `agentic-events` (shared envelope contract)
 - **Auth**: API-key header (`hmac.compare_digest`), in-process fixed-window rate limiting
 - **Testing**: pytest 9.1.1, pytest-cov 7.1.0, FastAPI `TestClient` (httpx 0.28.1)
