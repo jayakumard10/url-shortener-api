@@ -1,8 +1,8 @@
-fastapi==0.136.1
-uvicorn[standard]==0.34.0
-sqlalchemy==2.0.36
-psycopg[binary]==3.2.3
-pydantic==2.10.4
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+sqlalchemy==2.0.52
+psycopg[binary]==3.3.4
+pydantic==2.13.5
 kafka-python-ng==2.2.3
 agentic-events @ git+https://github.com/jayakumard10/agentic-sdlc-eventbus.git@v0.1.0
 pytest==9.1.1
