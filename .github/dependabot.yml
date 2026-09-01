@@ -1,42 +1,82 @@
 version: 2
 
+# GROUPING IS BY BLAST RADIUS, NOT BY SEMVER LABEL.
+#
+# The first version of this file grouped only `update-types: ["patch"]`, and only for
+# pip. That produced nine open pull requests in a day: four for GitHub Actions and one
+# for Docker, because neither ecosystem had a group at all, plus three pip updates that
+# were minor or major and so fell outside the one group that existed. pip also hit its
+# open-pull-requests-limit, meaning more were queued behind those.
+#
+# The rule below is deliberately not "group minor and patch everywhere". Every one of
+# those four Actions updates was a *major* bump - checkout 4 to 7, setup-python 5 to 7,
+# setup-uv 5 to 7, codeql-action 3 to 4 - so a minor-and-patch group would have prevented
+# none of them. What actually separates "review this individually" from "read the diff
+# once a month" is what breaks when it is wrong:
+#
+#   - A GitHub Action only affects CI. A bad bump turns a check red on the pull request
+#     that proposes it, which is the whole verification. Majors are the normal traffic
+#     here because actions are pinned by major tag, so they are grouped too.
+#   - A pip or Docker major changes what runs in production. pytest 8 to 9 changes test
+#     semantics; python 3.12-slim to 3.14-slim changes the runtime under the service.
+#     Those stay standalone so they get read on their own.
+#
+# Monthly rather than weekly, and not quarterly: with Dependabot security updates enabled
+# (repository settings, separate from this file) a real vulnerability opens its own
+# immediate pull request regardless of this schedule, so routine traffic can be slow. A
+# quarterly cadence would only make each grouped diff big enough to rubber-stamp.
+#
+# KNOWN INTERACTION, stated rather than discovered later: CI asserts that
+# requirements.lock is current, and Dependabot does not know this repository has a lock
+# file. A Dependabot pull request that edits requirements.txt therefore fails the
+# "Assert requirements.lock is current" step until someone regenerates it:
+#
+#   uv pip compile requirements.txt --universal --generate-hashes --python-version 3.12 -o requirements.lock
+#
+# That is a visible red check naming the exact fix, rather than a lock silently drifting
+# from the pins beside it. It is also why auto-merge is not enabled: every pip pull
+# request is red by construction, so auto-merge would never fire for the ecosystem that
+# most needs it. Fixing that means a workflow that regenerates the lock and pushes it
+# back onto the branch - a deliberate piece of automation, not a flag.
+#
+# agentic-events is a git dependency pinned to a tag; Dependabot does not bump those for
+# pip. Its resolved commit SHA is in requirements.lock, so a moved tag is caught by the
+# same CI step rather than by this file.
+
 updates:
-  # Every version in requirements.txt is pinned exactly, which stops surprise
-  # upgrades and equally stops security fixes arriving. Pinned and unwatched is the
-  # combination that quietly rots.
-  #
-  # KNOWN INTERACTION, stated rather than discovered later: CI asserts that
-  # requirements.lock is current, and Dependabot does not know this repository has a
-  # lock file. A Dependabot PR that edits requirements.txt will therefore fail the
-  # "Assert requirements.lock is current" step until someone regenerates it:
-  #
-  #   uv pip compile requirements.txt --universal --generate-hashes --python-version 3.12 -o requirements.lock
-  #
-  # That is a visible red check with a message saying exactly what to run, which is
-  # a better failure than a lock that silently drifts from the pins beside it.
-  #
-  # agentic-events is a git dependency pinned to a tag; Dependabot does not bump
-  # those for pip. Its resolved commit SHA is in requirements.lock, so a moved tag
-  # is caught by the same CI step rather than by this file.
   - package-ecosystem: pip
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     groups:
-      # One PR for the routine patch traffic. Separate PRs per package turn a
-      # security bump into something that has to be found among nine others.
-      patch-updates:
-        update-types: ["patch"]
+      pip-routine:
+        patterns: ["*"]
+        # Majors excluded on purpose: they change what runs in production and are read
+        # on their own.
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      docker-routine:
+        patterns: ["*"]
+        # A base-image major is a runtime change - 3.12-slim to 3.14-slim moves the
+        # Python under the service. Standalone.
+        update-types: ["minor", "patch"]
 
-  # The workflow pins actions by major tag (actions/checkout@v4), so this is what
-  # notices a v5. Public repo, so these runs cost nothing.
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      actions-routine:
+        patterns: ["*"]
+        # Every update type, majors included. Actions are pinned by major tag, so majors
+        # are the routine traffic; and a broken action fails the check on the pull
+        # request proposing it, which is the review.
+        update-types: ["major", "minor", "patch"]
