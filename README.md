@@ -11,7 +11,7 @@ limiter on `/shorten`, and a Kafka telemetry publish on every request. Own `post
 - **Database**: PostgreSQL 16 (Alpine), SQLAlchemy 2.0.36, psycopg 3.2.3
 - **Events**: kafka-python-ng 2.2.3, `agentic-events` (shared envelope contract)
 - **Auth**: API-key header (`hmac.compare_digest`), in-process fixed-window rate limiting
-- **Testing**: pytest 8.3.4, pytest-cov 7.1.0, FastAPI `TestClient` (httpx 0.28.1)
+- **Testing**: pytest 9.1.1, pytest-cov 7.1.0, FastAPI `TestClient` (httpx 0.28.1)
 - **Infra**: Docker Compose, Docker BuildKit secrets, GitHub Actions CI
 
 ## Architecture
