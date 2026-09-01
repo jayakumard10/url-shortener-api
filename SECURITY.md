@@ -83,17 +83,24 @@ touching the code.
 
 ### Known open advisories
 
-As of 2026-08-31, `pip-audit` reports two, both in pinned dependencies and neither yet
-addressed:
+As of 2026-08-31, `pip-audit` reports one:
 
 | Package | Version | Advisory | Fixed in |
 |---|---|---|---|
-| `python-dotenv` | 1.0.1 | PYSEC-2026-2270 | 1.2.2 |
 | `pytest` | 8.3.4 | PYSEC-2026-1845 | 9.0.3 |
 
-`pytest` is a test-only dependency and does not ship in the runtime image.
-`python-dotenv` is imported nowhere in the tree and appears to be removable outright
-rather than upgraded.
+`pytest` is a test-only dependency and does not ship in the runtime image, which is why
+it has not been rushed: the fix is a major version bump and wants the suite run against
+it deliberately.
+
+**Resolved:** `python-dotenv` 1.0.1 (PYSEC-2026-2270). No code here imports it, but it is
+not removable — `uvicorn[standard]` requires it for `--env-file` support, so it was a
+direct pin *and* a transitive dependency. Dropping the pin this repository did not need
+lets uvicorn's own `>=0.13` constraint resolve it, and a fresh install now gets 1.2.3.
+
+Note for anyone with an existing virtualenv: removing a pin does not upgrade a package
+that is already installed. Reinstall, or install from `requirements.lock`, to actually
+pick up the fixed version.
 
 ## Supported versions
 
