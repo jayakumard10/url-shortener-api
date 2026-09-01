@@ -83,24 +83,29 @@ touching the code.
 
 ### Known open advisories
 
-As of 2026-08-31, `pip-audit` reports one:
+**None.** As of 2026-09-01, `pip-audit` reports no vulnerabilities and there are no open
+Dependabot alerts.
 
-| Package | Version | Advisory | Fixed in |
-|---|---|---|---|
-| `pytest` | 8.3.4 | PYSEC-2026-1845 | 9.0.3 |
+`agentic-events` is reported as skipped rather than clean: it is a git dependency and not
+on PyPI, so no advisory database covers it. That is a gap in coverage, not a clean bill.
 
-`pytest` is a test-only dependency and does not ship in the runtime image, which is why
-it has not been rushed: the fix is a major version bump and wants the suite run against
-it deliberately.
+### Resolved
 
-**Resolved:** `python-dotenv` 1.0.1 (PYSEC-2026-2270). No code here imports it, but it is
-not removable — `uvicorn[standard]` requires it for `--env-file` support, so it was a
-direct pin *and* a transitive dependency. Dropping the pin this repository did not need
-lets uvicorn's own `>=0.13` constraint resolve it, and a fresh install now gets 1.2.3.
+**`pytest` 8.3.4** — PYSEC-2026-1845, vulnerable tmpdir handling, medium. Fixed by moving
+to 9.1.1, past the 9.0.3 patch. It was left open deliberately for a while: test-only,
+never in the runtime image, and a major version bump that wanted the suite run against it
+rather than a rushed merge. Verified on a clean install before landing — 82 passed, and
+the repository's own pytest machinery re-checked under the new major, since a collection
+hook is exactly what a major breaks.
 
-Note for anyone with an existing virtualenv: removing a pin does not upgrade a package
+**`python-dotenv` 1.0.1** — PYSEC-2026-2270. No code here imports it, but it is not
+removable: `uvicorn[standard]` requires it for `--env-file` support, so it was a direct
+pin *and* a transitive dependency. Dropping the pin this repository did not need lets
+uvicorn's own `>=0.13` constraint resolve it, and a fresh install now gets 1.2.3.
+
+Note for anyone with an existing virtualenv: changing a pin does not upgrade a package
 that is already installed. Reinstall, or install from `requirements.lock`, to actually
-pick up the fixed version.
+pick up a fixed version.
 
 ## Supported versions
 
