@@ -55,6 +55,25 @@ updates:
         # Majors excluded on purpose: they change what runs in production and are read
         # on their own.
         update-types: ["minor", "patch"]
+    ignore:
+      # pydantic cannot move while agentic-events is pinned at v0.1.0, because that
+      # package requires `pydantic==2.10.4` exactly - not a floor, an equality pin:
+      #
+      #   $ python -c "import importlib.metadata as m; print(m.requires('agentic-events'))"
+      #   ['pydantic==2.10.4', ...]
+      #
+      # Dependabot does not see that constraint, so it proposed pydantic 2.13.5 inside
+      # the first pip-routine group and made the whole group unresolvable:
+      #
+      #   No solution found when resolving dependencies:
+      #   Because agentic-events==0.1.0 depends on pydantic==2.10.4 and you require
+      #   pydantic==2.13.5, we can conclude that your requirements are unsatisfiable.
+      #
+      # Without this, every monthly group would arrive broken for the same reason and
+      # need the same manual surgery. Lifting it is a cross-repo change: relax the pin
+      # in agentic-sdlc-eventbus, publish a tag, bump the git ref here, then delete
+      # this block.
+      - dependency-name: pydantic
 
   - package-ecosystem: docker
     directory: /
