@@ -37,9 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           # Every run installed this repository's dependencies cold, though they are pinned and
@@ -50,7 +50,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: Assert requirements.lock is current
         # requirements.txt pins versions but not the resolution: a transitive
@@ -102,7 +102,7 @@ jobs:
     timeout-minutes: 10
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Write local secret file for compose
         run: |
